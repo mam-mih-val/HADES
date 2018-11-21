@@ -32,6 +32,9 @@ void reader()
     TH1F* histo_pt = new TH1F("pt distribution","pt distribution",100,0.0,2.5);
     histo_pt->GetXaxis()->SetTitle("pt, [GeV/c]");
 
+    TH1F* histo_M = new TH1F("mass distribution","mass distribution",100,0.0,4);
+    histo_M->GetXaxis()->SetTitle("mass, [GeV/c^{2}]");
+
     Long64_t n_events = (Long64_t) t->GetEntries();
     Int_t n_tracks = 0;
     Int_t n_hits = 0;
@@ -40,6 +43,9 @@ void reader()
     Double_t x1,x2;
     DataTreeTrack* track;
     Double_t pt=0;
+    Double_t E=0;
+    Double_t P=0;
+    Double_t m=0;
     for(int i=0;i<n_events;i++)
     {
         DTEvent->GetEntry(i);
@@ -60,11 +66,16 @@ void reader()
         {
             track = ev->GetVertexTrack(j);
             pt = track->GetPt();
+            E = track->GetEnergy();
+            P = track->GetP();
+            m=sqrt(E*E-P*P);
             histo_pt->Fill(pt);
+            histo_M->Fill(m);
+            
         }
     }
 
-    histo_pt->Draw();
+//    histo_M->Draw();
     TFile* w = new TFile("histo.root","recreate");
     w->cd();
     multy_MDC->Write();
@@ -73,6 +84,7 @@ void reader()
     q_vs_h->Write();
     vertex->Write();
     histo_pt->Write();
+    histo_M->Write();
     style->Write();
     w->Close();
 }
