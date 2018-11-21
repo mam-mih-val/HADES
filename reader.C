@@ -20,6 +20,9 @@ void reader()
     TH2F* q_vs_tr = new TH2F("charge vs tracks","charge in FW vs number of tracks",100,1,100,100,1,8000);
     q_vs_tr->GetXaxis()->SetTitle("MDC tracks");
     q_vs_tr->GetYaxis()->SetTitle("FW charge");
+    TH2F* q_vs_h = new TH2F("charge vs hits","charge in FW vs number of hits",100,1,100,100,1,8000);
+    q_vs_h->GetXaxis()->SetTitle("TOF hits");
+    q_vs_h->GetYaxis()->SetTitle("FW charge");
     Long64_t n_events = (Long64_t) t->GetEntries();
     Int_t n_tracks = 0;
     Int_t n_hits = 0;
@@ -34,14 +37,16 @@ void reader()
         multy_MDC->Fill(n_tracks);
         multy_TOF->Fill(n_hits);
         q_vs_tr->Fill(n_tracks,charge);
+        q_vs_h->Fill(n_hits,charge);
     }
 
-    q_vs_tr->Draw("colz");
+    q_vs_h->Draw("colz");
     TFile* w = new TFile("histo.root","recreate");
     w->cd();
     multy_MDC->Write();
     multy_TOF->Write();
     q_vs_tr->Write();
+    q_vs_h->Write();
     style->Write();
     w->Close();
 
