@@ -23,10 +23,15 @@ void reader()
     TH2F* q_vs_h = new TH2F("charge vs hits","charge in FW vs number of hits",100,1,100,100,1,8000);
     q_vs_h->GetXaxis()->SetTitle("TOF hits");
     q_vs_h->GetYaxis()->SetTitle("FW charge");
+    TH2F* vertex = new TH2F("vertex position","vertex position",20,-50,50,20,-150,50);
+    vertex->GetXaxis()->SetTitle("x");
+    vertex->GetYaxis()->SetTitle("z");
     Long64_t n_events = (Long64_t) t->GetEntries();
     Int_t n_tracks = 0;
     Int_t n_hits = 0;
     Double_t charge = 0;
+    Double_t vert_pos[3];
+    Double_t x1,x2;
     for(int i=0;i<n_events;i++)
     {
         DTEvent->GetEntry(i);
@@ -38,16 +43,22 @@ void reader()
         multy_TOF->Fill(n_hits);
         q_vs_tr->Fill(n_tracks,charge);
         q_vs_h->Fill(n_hits,charge);
+        for(int j=0;j<3;j++)
+        {
+            vert_pos[j]=ev->GetVertexPositionComponent(j);
+        }
+        vertex->Fill(vert_pos[0],vert_pos[2]);
+
     }
 
-    q_vs_h->Draw("colz");
+//    vertex->Draw("colz");
     TFile* w = new TFile("histo.root","recreate");
     w->cd();
     multy_MDC->Write();
     multy_TOF->Write();
     q_vs_tr->Write();
     q_vs_h->Write();
+    vertex->Write();
     style->Write();
     w->Close();
-
 }
