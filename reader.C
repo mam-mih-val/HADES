@@ -44,6 +44,10 @@ void reader()
     TH1F* histo_phi = new TH1F("phi distribution","phi distribution",100,-3.5,3.5);
     histo_phi->GetXaxis()->SetTitle("rapidity");
 
+    TH2F* phi_vs_pt = new TH2F("phi vs pt","phi vs pt",100,0,2.5,100,-3.5,3.5);
+    phi_vs_pt->GetXaxis()->SetTitle("pt, [GeV/c]");
+    phi_vs_pt->GetYaxis()->SetTitle("phi");
+
     Long64_t n_events = (Long64_t) t->GetEntries();
     Int_t n_tracks = 0;
     Int_t n_hits = 0;
@@ -88,10 +92,11 @@ void reader()
             histo_y->Fill(y);
             histo_pt->Fill(pt);
             histo_M->Fill(m);
+            phi_vs_pt->Fill(pt,phi);
         }
     }
 
-    histo_phi->Draw();
+    phi_vs_pt->Draw();
     TFile* w = new TFile("histo.root","recreate");
     w->cd();
     multy_MDC->Write();
