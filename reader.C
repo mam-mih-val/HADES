@@ -25,9 +25,12 @@ void reader()
     q_vs_h->GetXaxis()->SetTitle("TOF hits");
     q_vs_h->GetYaxis()->SetTitle("FW charge");
 
-    TH2F* vertex = new TH2F("vertex position","vertex position",20,-50,50,20,-150,50);
+    TH2F* vertex = new TH2F("vertex position","vertex position, x vs y",20,-4,4,20,-4,4);
     vertex->GetXaxis()->SetTitle("x");
-    vertex->GetYaxis()->SetTitle("z");
+    vertex->GetYaxis()->SetTitle("y");
+
+    TH1F* vertex_z = new TH1F("vertex position on z","vertex position on z",100,-150,50);
+    vertex_z->GetXaxis()->SetTitle("z");
 
     TH1F* histo_pt = new TH1F("pt distribution","pt distribution",100,0.0,2.5);
     histo_pt->GetXaxis()->SetTitle("pt, [GeV/c]");
@@ -61,7 +64,8 @@ void reader()
         {
             vert_pos[j]=ev->GetVertexPositionComponent(j);
         }
-        vertex->Fill(vert_pos[0],vert_pos[2]);
+        vertex->Fill(vert_pos[0],vert_pos[1]);
+        vertex_z->Fill(vert_pos[2]);
         for(int j=0;j<n_tracks;j++)
         {
             track = ev->GetVertexTrack(j);
@@ -83,6 +87,7 @@ void reader()
     q_vs_tr->Write();
     q_vs_h->Write();
     vertex->Write();
+    vertex_z->Write();
     histo_pt->Write();
     histo_M->Write();
     style->Write();
