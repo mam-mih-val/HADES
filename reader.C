@@ -38,6 +38,12 @@ void reader()
     TH1F* histo_M = new TH1F("mass distribution","mass distribution",100,0.0,4);
     histo_M->GetXaxis()->SetTitle("mass, [GeV/c^{2}]");
 
+    TH1F* histo_y = new TH1F("rapidity distribution","rapidity distribution",100,0,2);
+    histo_y->GetXaxis()->SetTitle("rapidity");
+
+    TH1F* histo_phi = new TH1F("phi distribution","phi distribution",100,-3.5,3.5);
+    histo_phi->GetXaxis()->SetTitle("rapidity");
+
     Long64_t n_events = (Long64_t) t->GetEntries();
     Int_t n_tracks = 0;
     Int_t n_hits = 0;
@@ -49,6 +55,9 @@ void reader()
     Double_t E=0;
     Double_t P=0;
     Double_t m=0;
+    Double_t y=0;
+    Double_t phi=0;
+
     for(int i=0;i<n_events;i++)
     {
         DTEvent->GetEntry(i);
@@ -72,14 +81,17 @@ void reader()
             pt = track->GetPt();
             E = track->GetEnergy();
             P = track->GetP();
-            m=sqrt(E*E-P*P);
+            m = sqrt(E*E-P*P);
+            y = track->GetRapidity();
+            phi = track->GetPhi();
+            histo_phi->Fill(phi);
+            histo_y->Fill(y);
             histo_pt->Fill(pt);
             histo_M->Fill(m);
-            
         }
     }
 
-//    histo_M->Draw();
+    histo_phi->Draw();
     TFile* w = new TFile("histo.root","recreate");
     w->cd();
     multy_MDC->Write();
@@ -90,6 +102,8 @@ void reader()
     vertex_z->Write();
     histo_pt->Write();
     histo_M->Write();
+    histo_y->Write();
+    histo_phi->Write();
     style->Write();
     w->Close();
 }
