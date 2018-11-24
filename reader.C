@@ -14,14 +14,18 @@ void reader()
     TH1F* multy_MDC = new TH1F("number of tracks, MDC","number of tracks MDC",100,1,100);
     multy_MDC->GetXaxis()->SetTitle("MDC tracks");
 
-    TH1F* multy_TOF = new TH1F("number of hits, TOF","number of hits, TOF+RPC",100,1,100);
+    TH1F* multy_TOF = new TH1F("number of hits, TOF","number of hits, TOF+RPC",200,1,200);
     multy_TOF->GetXaxis()->SetTitle("TOF hits");
+
+    TH2F* tr_vs_h = new TH2F("tracks vs hits","number of tracks in MDC vs hits in TOF+RPC",100,1,100,100,1,200);
+    tr_vs_h->GetXaxis()->SetTitle("MDC tracks");
+    tr_vs_h->GetYaxis()->SetTitle("TOF+RPC hits");
 
     TH2F* q_vs_tr = new TH2F("charge vs tracks","charge in FW vs number of tracks",100,1,100,100,1,8000);
     q_vs_tr->GetXaxis()->SetTitle("MDC tracks");
     q_vs_tr->GetYaxis()->SetTitle("FW charge");
 
-    TH2F* q_vs_h = new TH2F("charge vs hits","charge in FW vs number of hits",100,1,100,100,1,8000);
+    TH2F* q_vs_h = new TH2F("charge vs hits","charge in FW vs number of hits",100,1,200,100,1,8000);
     q_vs_h->GetXaxis()->SetTitle("TOF hits");
     q_vs_h->GetYaxis()->SetTitle("FW charge");
 
@@ -44,33 +48,32 @@ void reader()
     TH1F* histo_phi = new TH1F("phi distribution","phi distribution",100,-3.5,3.5);
     histo_phi->GetXaxis()->SetTitle("rapidity");
 
-    TH2F* phi_vs_pt = new TH2F("phi vs pt","phi vs pt",100,0,2.5,100,-3.5,3.5);
-    phi_vs_pt->GetXaxis()->SetTitle("pt, [GeV/c]");
-    phi_vs_pt->GetYaxis()->SetTitle("phi");
-
     Long64_t n_events = (Long64_t) t->GetEntries();
     Int_t n_tracks = 0;
     Int_t n_hits = 0;
+    Int_t n_tracks_selected = 0;
     Double_t charge = 0;
     Double_t vert_pos[3];
     Double_t x1,x2;
     DataTreeTrack* track;
-    Double_t pt=0;
-    Double_t E=0;
-    Double_t P=0;
-    Double_t m=0;
+//    Double_t pt=0;
+//    Double_t E=0;
+//    Double_t P=0;
+//    Double_t m=0;
     Double_t y=0;
     Double_t phi=0;
+    TLorentzVector P;
 
     for(int i=0;i<n_events;i++)
     {
         DTEvent->GetEntry(i);
-        n_tracks = ev->GetNVertexTracks();
-        n_hits = ev->GetNTOFHits();
+        n_tracks = ev->GetCentralityEstimator(3);
+        n_hits = ev->GetCentralityEstimator(1);
         charge = ev->GetPSDEnergy();
 
         multy_MDC->Fill(n_tracks);
         multy_TOF->Fill(n_hits);
+        tr_vs_h->Fill(n_tracks,n_hits);
         q_vs_tr->Fill(n_tracks,charge);
         q_vs_h->Fill(n_hits,charge);
         for(int j=0;j<3;j++)
@@ -79,30 +82,25 @@ void reader()
         }
         vertex->Fill(vert_pos[0],vert_pos[1]);
         vertex_z->Fill(vert_pos[2]);
-        for(int j=0;j<n_tracks;j++)
+        n_tracks_selected = ev->GetNVertexTracks();
+        for(int j=0;j<n_tracks_selected;j++)
         {
             track = ev->GetVertexTrack(j);
-            pt = track->GetPt();
-            E = track->GetEnergy();
-            P = track->GetP();
-            m = sqrt(E*E-P*P);
-            y = track->GetRapidity();
-            phi = track->GetPhi();
-            histo_phi->Fill(phi);
-            histo_y->Fill(y);
-            histo_pt->Fill(pt);
-            histo_M->Fill(m);
-            phi_vs_pt->Fill(pt,phi);
+            P = track->GetMomentum();
+            histo_phi->Fill(P.Phi());
+            histo_y->Fill(P.Rapidity());
+            histo_pt->Fill(P.Pt());
+            histo_M->Fill(P.M());
         }
     }
 
-    phi_vs_pt->Draw();
     TFile* w = new TFile("histo.root","recreate");
     w->cd();
     multy_MDC->Write();
     multy_TOF->Write();
     q_vs_tr->Write();
     q_vs_h->Write();
+    tr_vs_h->Write();
     vertex->Write();
     vertex_z->Write();
     histo_pt->Write();
