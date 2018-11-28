@@ -39,14 +39,18 @@ void reader()
     TH1F* histo_pt = new TH1F("pt distribution","pt distribution",100,0.0,2.5);
     histo_pt->GetXaxis()->SetTitle("pt, [GeV/c]");
 
-    TH1F* histo_M = new TH1F("mass distribution","mass distribution",100,0.0,4);
-    histo_M->GetXaxis()->SetTitle("mass, [GeV/c^{2}]");
+    TH1F* histo_M = new TH1F("mass distribution","mass distribution",200,-0.5,4.5);
+    histo_M->GetXaxis()->SetTitle("Z*m, [GeV/c^{2}]");
 
     TH1F* histo_y = new TH1F("rapidity distribution","rapidity distribution",100,0,2);
     histo_y->GetXaxis()->SetTitle("rapidity");
 
-    TH1F* histo_phi = new TH1F("phi distribution","phi distribution",100,-3.5,3.5);
-    histo_phi->GetXaxis()->SetTitle("rapidity");
+    TH1F* histo_phi = new TH1F("phi distribution","phi distribution",400,-3.5,3.5);
+    histo_phi->GetXaxis()->SetTitle("phi [rad]");
+
+    TH2F* xy_TOF = new TH2F("coordinates of hits","coordinates of hits in TOF+RPC",100,-200,200,100,-100,100);
+    xy_TOF->GetXaxis()->SetTitle("x");
+    xy_TOF->GetYaxis()->SetTitle("y");
 
     Long64_t n_events = (Long64_t) t->GetEntries();
     Int_t n_tracks = 0;
@@ -54,14 +58,12 @@ void reader()
     Int_t n_tracks_selected = 0;
     Double_t charge = 0;
     Double_t vert_pos[3];
-    Double_t x1,x2;
+    DataTreeTOFHit* tof_hit;
     DataTreeTrack* track;
-//    Double_t pt=0;
-//    Double_t E=0;
-//    Double_t P=0;
-//    Double_t m=0;
     Double_t y=0;
     Double_t phi=0;
+    Double_t Z = 0;
+    Double_t M = 0;
     TLorentzVector P;
 
     for(int i=0;i<n_events;i++)
@@ -70,7 +72,6 @@ void reader()
         n_tracks = ev->GetCentralityEstimator(3);
         n_hits = ev->GetCentralityEstimator(1);
         charge = ev->GetPSDEnergy();
-
         multy_MDC->Fill(n_tracks);
         multy_TOF->Fill(n_hits);
         tr_vs_h->Fill(n_tracks,n_hits);
@@ -86,11 +87,15 @@ void reader()
         for(int j=0;j<n_tracks_selected;j++)
         {
             track = ev->GetVertexTrack(j);
+            tof_hit = ev->GetTOFHit(j);
+            xy_TOF->Fill(tof_hit->GetX(),tof_hit->GetY());
             P = track->GetMomentum();
             histo_phi->Fill(P.Phi());
             histo_y->Fill(P.Rapidity());
             histo_pt->Fill(P.Pt());
-            histo_M->Fill(P.M());
+            M = sqrt( tof_hit->GetSquaredMass() );
+            Z = tof_hit->GetCharge()/fabs(tof_hit->GetCharge());
+            histo_M->Fill(M*Z/1000);
         }
     }
 
@@ -101,6 +106,7 @@ void reader()
     q_vs_tr->Write();
     q_vs_h->Write();
     tr_vs_h->Write();
+    xy_TOF->Write();
     vertex->Write();
     vertex_z->Write();
     histo_pt->Write();
