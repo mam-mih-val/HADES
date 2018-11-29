@@ -52,6 +52,15 @@ void reader()
     xy_TOF->GetXaxis()->SetTitle("x");
     xy_TOF->GetYaxis()->SetTitle("y");
 
+    TH1F* histo_Qx = new TH1F("Qx distribution","Qx distribution",100,-5000,5000);
+    histo_Qx->GetXaxis()->SetTitle("Qx");
+
+    TH1F* histo_Qy = new TH1F("Qy distribution","Qy distribution",100,-5000,5000);
+    histo_Qy->GetXaxis()->SetTitle("Qy");
+
+    TH1F* histo_PsiRP = new TH1F("#Psi_{RP} distribution","#Psi_{RP} distribution",100,-3.5,3.5);
+    histo_PsiRP->GetXaxis()->SetTitle("#Psi_{RP}, [rad]");
+
     Long64_t n_events = (Long64_t) t->GetEntries();
     Int_t n_tracks = 0;
     Int_t n_hits = 0;
@@ -60,10 +69,15 @@ void reader()
     Double_t vert_pos[3];
     DataTreeTOFHit* tof_hit;
     DataTreeTrack* track;
+    DataTreePSDModule* m_psd;
+    Double_t m_phi=0; // angle of FW module
+    Double_t m_q = 0; // charge of FW module
+    Double_t Qx, Qy, PsiRP;
     Double_t y=0;
     Double_t phi=0;
     Double_t Z = 0;
     Double_t M = 0;
+    Int_t N_psd_modules = 0;
     TLorentzVector P;
 
     for(int i=0;i<n_events;i++)
@@ -84,6 +98,9 @@ void reader()
         vertex->Fill(vert_pos[0],vert_pos[1]);
         vertex_z->Fill(vert_pos[2]);
         n_tracks_selected = ev->GetNVertexTracks();
+
+        // tracks & tof hits analysis 
+
         for(int j=0;j<n_tracks_selected;j++)
         {
             track = ev->GetVertexTrack(j);
@@ -97,8 +114,27 @@ void reader()
             Z = tof_hit->GetCharge()/fabs(tof_hit->GetCharge());
             histo_M->Fill(M*Z/1000);
         }
+
+        // estimating if RP angle
+
+        N_psd_modules = ev->GetNPSDModules();
+        Qx=0; Qy=0;
+        for(int k=0;k<N_psd_modules;k++)
+        {
+            m_psd = ev->GetPSDModule(k);
+            m_phi = m_psd->GetPhi();
+            m_q = m_psd->GetEnergy();
+            Qx+=m_q*cos(m_phi);
+            Qy+=m_q*sin(m_phi);
+        }
+        histo_Qx->Fill(Qx);
+        histo_Qy->Fill(Qy);
+        PsiRP=atan2(Qy,Qx);
+        histo_PsiRP->Fill(PsiRP);
+
     }
 
+//    histo_PsiRP->Draw();
     TFile* w = new TFile("histo.root","recreate");
     w->cd();
     multy_MDC->Write();
@@ -113,6 +149,9 @@ void reader()
     histo_M->Write();
     histo_y->Write();
     histo_phi->Write();
+    histo_Qx->Write();
+    histo_Qy->Write();
+    histo_PsiRP->Write();
     style->Write();
     w->Close();
 }
