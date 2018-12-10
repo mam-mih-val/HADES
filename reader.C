@@ -1,157 +1,140 @@
-void reader()
+#include "reader.h"
+
+reader::reader()
 {
-    auto fStyle = new TFile("style.root");
-    auto style = (TStyle*) fStyle->Get("style");
-    gROOT->ForceStyle();
-    style->cd();
-    fStyle->Close();
-    auto f = new TFile("AuAu.root");
-    auto t = (TTree*) f->Get("DataTree");
-    auto ev = new DataTreeEvent;
-    auto DTEvent = (TBranch*) t->GetBranch("DTEvent");
+    fChain = new TChain("DataTree");
+    fChain->Add("AuAu.root");
+    ev = new DataTreeEvent;
+    DTEvent = (TBranch*) fChain->GetBranch("DTEvent");
     DTEvent->SetAddress(&ev);
+    MeanQx = 0; MeanQy = 0;
+//    cout << "success reading" << endl;
+}
+reader::~reader()
+{
+    delete ev;
+    delete fChain;
+}
+void reader::GetEvent(Int_t n)
+{
+    fChain->GetEvent(n);
+}
 
-    TH1F* multy_MDC = new TH1F("number of tracks, MDC","number of tracks MDC",100,1,100);
-    multy_MDC->GetXaxis()->SetTitle("MDC tracks");
-
-    TH1F* multy_TOF = new TH1F("number of hits, TOF","number of hits, TOF+RPC",200,1,200);
-    multy_TOF->GetXaxis()->SetTitle("TOF hits");
-
-    TH2F* tr_vs_h = new TH2F("tracks vs hits","number of tracks in MDC vs hits in TOF+RPC",100,1,100,100,1,200);
-    tr_vs_h->GetXaxis()->SetTitle("MDC tracks");
-    tr_vs_h->GetYaxis()->SetTitle("TOF+RPC hits");
-
-    TH2F* q_vs_tr = new TH2F("charge vs tracks","charge in FW vs number of tracks",100,1,100,100,1,8000);
-    q_vs_tr->GetXaxis()->SetTitle("MDC tracks");
-    q_vs_tr->GetYaxis()->SetTitle("FW charge");
-
-    TH2F* q_vs_h = new TH2F("charge vs hits","charge in FW vs number of hits",100,1,200,100,1,8000);
-    q_vs_h->GetXaxis()->SetTitle("TOF hits");
-    q_vs_h->GetYaxis()->SetTitle("FW charge");
-
-    TH2F* vertex = new TH2F("vertex position","vertex position, x vs y",20,-4,4,20,-4,4);
-    vertex->GetXaxis()->SetTitle("x");
-    vertex->GetYaxis()->SetTitle("y");
-
-    TH1F* vertex_z = new TH1F("vertex position on z","vertex position on z",100,-150,50);
-    vertex_z->GetXaxis()->SetTitle("z");
-
-    TH1F* histo_pt = new TH1F("pt distribution","pt distribution",100,0.0,2.5);
-    histo_pt->GetXaxis()->SetTitle("pt, [GeV/c]");
-
-    TH1F* histo_M = new TH1F("mass distribution","mass distribution",200,-0.5,4.5);
-    histo_M->GetXaxis()->SetTitle("Z*m, [GeV/c^{2}]");
-
-    TH1F* histo_y = new TH1F("rapidity distribution","rapidity distribution",100,0,2);
-    histo_y->GetXaxis()->SetTitle("rapidity");
-
-    TH1F* histo_phi = new TH1F("phi distribution","phi distribution",400,-3.5,3.5);
-    histo_phi->GetXaxis()->SetTitle("phi [rad]");
-
-    TH2F* xy_TOF = new TH2F("coordinates of hits","coordinates of hits in TOF+RPC",100,-200,200,100,-100,100);
-    xy_TOF->GetXaxis()->SetTitle("x");
-    xy_TOF->GetYaxis()->SetTitle("y");
-
-    TH1F* histo_Qx = new TH1F("Qx distribution","Qx distribution",100,-5000,5000);
-    histo_Qx->GetXaxis()->SetTitle("Qx");
-
-    TH1F* histo_Qy = new TH1F("Qy distribution","Qy distribution",100,-5000,5000);
-    histo_Qy->GetXaxis()->SetTitle("Qy");
-
-    TH1F* histo_PsiRP = new TH1F("#Psi_{RP} distribution","#Psi_{RP} distribution",100,-3.5,3.5);
-    histo_PsiRP->GetXaxis()->SetTitle("#Psi_{RP}, [rad]");
-
-    Long64_t n_events = (Long64_t) t->GetEntries();
-    Int_t n_tracks = 0;
-    Int_t n_hits = 0;
-    Int_t n_tracks_selected = 0;
-    Double_t charge = 0;
-    Double_t vert_pos[3];
-    DataTreeTOFHit* tof_hit;
-    DataTreeTrack* track;
-    DataTreePSDModule* m_psd;
-    Double_t m_phi=0; // angle of FW module
-    Double_t m_q = 0; // charge of FW module
-    Double_t Qx, Qy, PsiRP;
-    Double_t y=0;
-    Double_t phi=0;
-    Double_t Z = 0;
-    Double_t M = 0;
-    Int_t N_psd_modules = 0;
-    TLorentzVector P;
-
-    for(int i=0;i<n_events;i++)
+void reader::Main_Loop()
+{
+    TProfile* pt_vs_v1 = new TProfile("y vs v_{1}","rapidity vs directed flow",8,-0.5,1.5);
+    pt_vs_v1->GetXaxis()->SetTitle("rapidity, y");
+    pt_vs_v1->GetYaxis()->SetTitle("v_{1}");
+    this->GetQMean();
+    Int_t N_ev = (Int_t) fChain->GetEntries();
+    DataTreeTrack* tr;
+    Float_t phi=0, pt=0, v1, y, w;
+    Float_t* PsiEP = new Float_t[2];
+    for(int i=0;i<N_ev;i++)
     {
-        DTEvent->GetEntry(i);
-        n_tracks = ev->GetCentralityEstimator(3);
-        n_hits = ev->GetCentralityEstimator(1);
-        charge = ev->GetPSDEnergy();
-        multy_MDC->Fill(n_tracks);
-        multy_TOF->Fill(n_hits);
-        tr_vs_h->Fill(n_tracks,n_hits);
-        q_vs_tr->Fill(n_tracks,charge);
-        q_vs_h->Fill(n_hits,charge);
-        for(int j=0;j<3;j++)
+        fChain->GetEntry(i);
+        PsiEP = this->GetPsiEP();
+        Int_t n_tracks = (Int_t) ev->GetNVertexTracks();
+        for(int j=0;j<n_tracks;j++)
         {
-            vert_pos[j]=ev->GetVertexPositionComponent(j);
+            tr = ev->GetVertexTrack(j);
+            phi = tr->GetPhi();
+            pt = tr->GetPt();
+            y = tr->GetRapidity();
+            if(y>=0)
+                w = 1;
+            if(y<0)
+                w = -1;
+            v1 = this->Get_v(PsiEP,phi);
+//            cout<< "v1=" << v1 << " phi=" << phi << " Psi=" << PsiEP[0] << endl;
+            pt_vs_v1->Fill(y,v1);
         }
-        vertex->Fill(vert_pos[0],vert_pos[1]);
-        vertex_z->Fill(vert_pos[2]);
-        n_tracks_selected = ev->GetNVertexTracks();
-
-        // tracks & tof hits analysis 
-
-        for(int j=0;j<n_tracks_selected;j++)
-        {
-            track = ev->GetVertexTrack(j);
-            tof_hit = ev->GetTOFHit(j);
-            xy_TOF->Fill(tof_hit->GetX(),tof_hit->GetY());
-            P = track->GetMomentum();
-            histo_phi->Fill(P.Phi());
-            histo_y->Fill(P.Rapidity());
-            histo_pt->Fill(P.Pt());
-            M = sqrt( tof_hit->GetSquaredMass() );
-            Z = tof_hit->GetCharge()/fabs(tof_hit->GetCharge());
-            histo_M->Fill(M*Z/1000);
-        }
-
-        // estimating if RP angle
-
-        N_psd_modules = ev->GetNPSDModules();
-        Qx=0; Qy=0;
-        for(int k=0;k<N_psd_modules;k++)
-        {
-            m_psd = ev->GetPSDModule(k);
-            m_phi = m_psd->GetPhi();
-            m_q = m_psd->GetEnergy();
-            Qx+=m_q*cos(m_phi);
-            Qy+=m_q*sin(m_phi);
-        }
-        histo_Qx->Fill(Qx);
-        histo_Qy->Fill(Qy);
-        PsiRP=atan2(Qy,Qx);
-        histo_PsiRP->Fill(PsiRP);
-
     }
+    TCanvas* canv = new TCanvas("canv","y vs v_{1}",1500,700);
+    canv->cd();
+    pt_vs_v1->Draw();
+    TLine* l = new TLine(-1,0,1,0);
+    //l->Draw("same");
+}
 
-//    histo_PsiRP->Draw();
-    TFile* w = new TFile("histo.root","recreate");
-    w->cd();
-    multy_MDC->Write();
-    multy_TOF->Write();
-    q_vs_tr->Write();
-    q_vs_h->Write();
-    tr_vs_h->Write();
-    xy_TOF->Write();
-    vertex->Write();
-    vertex_z->Write();
-    histo_pt->Write();
-    histo_M->Write();
-    histo_y->Write();
-    histo_phi->Write();
-    histo_Qx->Write();
-    histo_Qy->Write();
-    histo_PsiRP->Write();
-    style->Write();
-    w->Close();
+Float_t reader::Get_v( Float_t* PsiEP, Float_t phi, Int_t n=1  )
+{
+    Float_t MeanPsiEP = ( PsiEP[0] + PsiEP[1] ) / 2;
+    Float_t v_n=0;
+    v_n = cos( n*(phi-MeanPsiEP) )/cos( n*(PsiEP[0]-PsiEP[1]) );
+    return v_n;
+}
+
+void reader::GetQMean() 
+{
+    Int_t N = fChain->GetEntries();
+    Int_t n_psd_modules;
+    DataTreePSDModule* psd_module;
+    Float_t q, phi;
+    Float_t Qx, Qy;
+    Float_t EofAll;
+    TH2F* histo_Q = new TH2F("Q-vectors distribution","Q-vectors distribution",100,-2.5,2.5,100,-2.5,2.5);
+    histo_Q->GetXaxis()->SetTitle("Qx");
+    histo_Q->GetYaxis()->SetTitle("Qy");
+    for(Long64_t i=0; i<N; i++) 
+    {
+        Qx=0; Qy=0;
+        fChain->GetEntry(i);
+        EofAll = ev->GetPSDEnergy();
+        n_psd_modules = ev->GetNPSDModules();
+        for(int j=0;j<n_psd_modules;j++)
+        {
+            psd_module = ev->GetPSDModule(j);
+            phi =        psd_module->GetPhi();
+            q   =        psd_module->GetEnergy();
+            Qx+=q*cos(phi); Qy+=q*sin(phi);
+        }
+        histo_Q->Fill(Qx,Qy);
+    }
+    MeanQx = histo_Q->GetMean(1);
+    MeanQy = histo_Q->GetMean(2);
+//    delete histo_Q;
+}
+
+Float_t* reader::GetPsiEP() 
+{
+    Int_t n_psd_modules;
+    DataTreePSDModule* psd_module;
+    Float_t q, phi;
+    Float_t Qx[2], Qy[2];
+    Float_t EofAll;
+
+    for(int i=0;i<2;i++)
+    {
+        Qx[0] = 0;
+        Qy[0] = 0;
+    }
+    EofAll = ev->GetPSDEnergy();
+    n_psd_modules = ev->GetNPSDModules();
+    for(int j=0;j<n_psd_modules;j++)
+    {
+        psd_module = ev->GetPSDModule(j);
+        phi =        psd_module->GetPhi();
+        q   =        psd_module->GetEnergy();
+        Int_t p = gRandom->Uniform(0,1);
+        Qx[p]+= q*cos(phi); 
+        Qy[p]+= q*sin(phi);
+    }
+    Float_t* PsiEP = new Float_t[2];
+    for(int j=0;j<2;j++)
+    {
+        Qx[j]-=MeanQx; 
+        Qy[j]-=MeanQy;
+        PsiEP[j] = atan2(Qy[j],Qx[j]);
+//        cout << "Qx=" << Qx[j] << " Qy=" << Qy[j] << " PsiEP=" << PsiEP[j] << endl;
+    }
+    return PsiEP;
+}
+Bool_t  reader::evSelector()
+{
+    if (ev->GetNVertexTracks() < 5)
+        return 0;
+    if (ev->GetNTOFHits() < 5)
+        return 0;
+    return 1;
 }
