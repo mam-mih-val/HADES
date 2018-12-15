@@ -1,0 +1,33 @@
+void write_style() {
+    auto fStyle = new TFile("style.root","RECREATE");    
+    TStyle* style = new TStyle("style","my_style");
+    style->SetTitleSize(0.04,"X");
+    style->SetTitleSize(0.04,"Y");
+    style->SetTitleOffset(1.6,"Y");
+    style->SetTitleOffset(1.0,"X");
+    style->SetFrameLineWidth(2);
+    style->SetFrameFillColor(0);
+    style->SetPadColor(0);
+    style->SetLabelSize(0.04,"X");
+    style->SetLabelSize(0.04,"Y");
+    style->SetPadTopMargin(0.1);
+    style->SetPadBottomMargin(0.18);
+    style->SetPadLeftMargin(0.18);
+    style->SetPadTopMargin(0.1);
+    style->SetPadRightMargin(0.1);
+    style->SetMarkerSize(1.5);
+    style->SetErrorX(0);
+    style->SetOptStat(0);
+    style->SetCanvasColor(0);
+    style->SetTitleFillColor(0);
+    style->SetTitleBorderSize(0);
+    style->SetHistLineWidth(3);
+    style->SetLineWidth(2);
+    style->SetCanvasBorderMode(0);
+    style->SetLegendBorderSize(0);
+    style->SetPadBorderMode(0);
+    //style->SetTitleAlign(13);
+    fStyle->cd();
+    style->Write();
+    fStyle->Close();
+}
