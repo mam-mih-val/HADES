@@ -1,9 +1,11 @@
 #include "reader.h"
+#include "HADES_constants.h"
 
 reader::reader()
 {
     fChain = new TChain("DataTree");
-    fChain->Add("~/pool/1/mam2mih/out.root");
+    //fChain->Add("~/pool/1/mam2mih/out.root");
+    fChain->Add("AuAu.root");
     ev = new DataTreeEvent;
     DTEvent = (TBranch*) fChain->GetBranch("DTEvent");
     DTEvent->SetAddress(&ev);
@@ -17,6 +19,9 @@ reader::reader()
     MeanQy->GetXaxis()->SetTitle("centrality");
 
     ResPsi = new TProfile("resolution of SE, r","Resolution of subevent method, recentred",10,0,50);
+
+    this->GetQMean();
+    this->GetResPsi();
     cout << "Initialization was succsess" << endl;
 }
 reader::~reader()
@@ -31,7 +36,6 @@ void reader::GetEvent(Int_t n)
 
 void reader::Q_histos()
 {
-    this->GetQMean();
     cout << "Q-vector components distributions are building" << endl;
     Float_t* Q = new Float_t[2];
     Int_t n_ev = fChain->GetEntries();
@@ -80,8 +84,6 @@ void reader::Q_histos()
 
 void reader::v_histos()
 {
-    this->GetQMean();
-    this->GetResPsi();
     auto ResSubEv_nr = new TProfile("Res of SE, nr","Resolution of Subevent, not recentred",10,0,50);
     Int_t n_ev = fChain->GetEntries();
     Float_t* PsiEP_nr = new Float_t[2];
@@ -123,8 +125,6 @@ Float_t reader::Get_v( Float_t PsiEP, Float_t phi, Int_t n=1  )
 
 void reader::GetFlows()
 {
-    this->GetQMean();
-    this->GetResPsi();
     cout <<"Directed flow as function of rapidity and transverse momentum is building"<< endl;
 
     auto y_vs_v1_cent = new TProfile("y vs v1, 0-20","rapidity vs directed flow, centrality 0-20\%, protons",10,-1,1);
@@ -295,7 +295,6 @@ Float_t* reader::GetPsiEP_SE(Bool_t recentring=1) // random subevent method
             Qy[i]-= meany;
         }
         PsiEP[i] = atan2(Qy[i],Qx[i]);
-//        cout << "Qx = " << Qx[i] << " Qy = "<< Qy[i] << " recentring = " << recentring << " PsiEP = " << PsiEP[i] << " E_all = " << EofAll << endl;
     }
     return PsiEP;
 }
@@ -308,7 +307,6 @@ Float_t reader::GetPsiEP()
     Float_t meanx=MeanQx->GetBinContent(bin);
     Float_t meany=MeanQy->GetBinContent(bin);
     Q[0]-=meanx; Q[1]-=meany;
-//    cout << "Qx=" << Q[0] << " Qy=" << Q[1] << endl;
     Float_t PsiEP=atan2(Q[1],Q[0]);
     return PsiEP;
 }
@@ -324,8 +322,23 @@ Bool_t  reader::evSelector()
     if (  ev->GetVertexPositionComponent(2) > 0 || ev->GetVertexPositionComponent(2) < -60 )
         return 0;
     Float_t Rx = ev->GetVertexPositionComponent(0), Ry = ev->GetVertexPositionComponent(1);
-    Float_t R = sqrt( Rx*Rx + Ry*Ry );
-    if ( R > 3 )
+    if ( sqrt(Rx*Rx+Ry*Ry) > 3 )
+        return 0;
+    if ( ev->GetVertexQuality() < 0.5 || ev->GetVertexQuality() > 40 )
+        return 0;    
+    if ( !ev->GetTrigger(HADES_constants::kGoodVertexClust)->GetIsFired() ) 
+        return 0;
+    if ( ! ev->GetTrigger(HADES_constants::kGoodVertexCand)->GetIsFired() )
+        return 0;
+    if( !ev->GetTrigger(HADES_constants::kGoodSTART)->GetIsFired() )
+        return 0;
+    if( !ev->GetTrigger(HADES_constants::kNoPileUpSTART)->GetIsFired() )
+        return 0;
+    if( !ev->GetTrigger(HADES_constants::kGoodSTARTVETO)->GetIsFired() )
+        return 0;
+    if( !ev->GetTrigger(HADES_constants::kGoodSTARTMETA)->GetIsFired() )
+        return 0;
+    if( !ev->GetTrigger(HADES_constants::kNoVETO)->GetIsFired() )
         return 0;
     return 1;
 }
@@ -340,6 +353,12 @@ Bool_t reader::trSelector(Int_t idx)
     if ( tr->GetDCAComponent(1) > 15 )
         return 0;
     if ( len/tof/299.792458 > 1 ) 
+        return 0;
+    if ( hit->GetPositionComponent(0) < -5 || hit->GetPositionComponent(0) > 5 )
+        return 0;
+    if ( hit->GetPositionComponent(1) < -5 || hit->GetPositionComponent(1) > 5 )
+        return 0;
+    if ( tr->GetChi2() > 100 )
         return 0;
     return 1;
 }
@@ -408,17 +427,18 @@ void reader::MassQA()
             TLorentzVector P = tr->GetMomentum();
             p_histo->Fill(P.P());
             int q = tr->GetCharge();
-            float dEdx = tr->GetdEdx(2);
-            //cout << dEdx << endl;
-            m2_vs_p_all->Fill(P.P()*q,P.M2());
-            dEdx_vs_p_all->Fill(q*P.P(),dEdx);
             tof = hit->GetTime(); len = hit->GetPathLength();
             float beta = len/tof/299.792458;
+            float m2 = P.P()*P.P()*(1-beta*beta)/(beta*beta);
+            float dEdx = tr->GetdEdx(2);
+            //cout << dEdx << endl;
+            m2_vs_p_all->Fill(P.P()*q,m2);
+            dEdx_vs_p_all->Fill(q*P.P(),dEdx);
             beta_vs_p_all->Fill( P.P()*q,beta );
             if ( tr->GetPdgId() == 14 )
             {
                 beta_vs_p_p->Fill( P.P()*q,beta );
-                m2_vs_p_p->Fill(P.P()*q,P.M2());
+                m2_vs_p_p->Fill(P.P()*q,m2);
                 dEdx_vs_p_p->Fill(q*P.P(),dEdx);
             }
         }
