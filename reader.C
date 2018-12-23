@@ -4,8 +4,8 @@
 reader::reader()
 {
     fChain = new TChain("DataTree");
-    //fChain->Add("~/pool/1/mam2mih/out.root");
-    fChain->Add("AuAu.root");
+    fChain->Add("~/pool/1/mam2mih/out*.root");
+    //fChain->Add("AuAu.root");
     ev = new DataTreeEvent;
     DTEvent = (TBranch*) fChain->GetBranch("DTEvent");
     DTEvent->SetAddress(&ev);
@@ -19,9 +19,6 @@ reader::reader()
     MeanQy->GetXaxis()->SetTitle("centrality");
 
     ResPsi = new TProfile("resolution of SE, r","Resolution of subevent method, recentred",10,0,50);
-
-    this->GetQMean();
-    this->GetResPsi();
     cout << "Initialization was succsess" << endl;
 }
 reader::~reader()
