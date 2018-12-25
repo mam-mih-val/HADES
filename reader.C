@@ -1,11 +1,12 @@
 #include "reader.h"
 #include "HADES_constants.h"
+const float pi = 3.1415;
 
 reader::reader()
 {
     fChain = new TChain("DataTree");
-    fChain->Add("~/pool/1/mam2mih/out*.root");
-    //fChain->Add("AuAu.root");
+    //fChain->Add("~/pool/1/mam2mih/out*.root");
+    fChain->Add("AuAu.root");
     ev = new DataTreeEvent;
     DTEvent = (TBranch*) fChain->GetBranch("DTEvent");
     DTEvent->SetAddress(&ev);
@@ -79,6 +80,115 @@ void reader::Q_histos()
     Qy_r_histo->Write();
 }
 
+Float_t* reader::GetQxSE() 
+{
+    Float_t cent = ev->GetCentrality();
+    Float_t meanx = 0;
+    Int_t bin = (cent/5)+1;
+    Float_t* Qx = new Float_t[2];
+    meanx = MeanQx->GetBinContent(bin);
+    Qx[0]=0; Qx[1]=0;
+    Int_t n_psd_modules = ev->GetNPSDModules();
+    DataTreePSDModule* psd_module;
+    vector<DataTreePSDModule*> psd_v;
+    Float_t phi=0,q=0;
+    Float_t EofAll = ev->GetPSDEnergy();
+    for(int i=0;i<n_psd_modules;i++)
+    {
+        psd_module = ev->GetPSDModule(i);
+        if(psd_module->GetId() < 0)
+            continue;
+        psd_v.push_back(psd_module);
+    }
+    n_psd_modules = psd_v.size();
+    Float_t charge[2];
+    charge[0] = 0; charge[1] = 0;
+    while ( charge[0] == 0 || charge[1] == 0 )
+    {
+        random_shuffle(psd_v.begin(),psd_v.end());
+        for(int i=0;i<n_psd_modules;i++)
+        {
+            phi =        psd_v[i]->GetPhi();
+            q   =        abs( psd_v[i]->GetEnergy() );
+            Int_t p =i%2;
+            Qx[p] += q*cos(phi);
+            charge[p]+=q;
+        }
+    }
+    for(int i=0;i<2;i++)
+    {
+        if ( charge[i] != 0 )
+        Qx[i]/=charge[i];
+        Qx[i]-= meanx; 
+    }
+    return Qx;
+}
+
+Float_t* reader::GetQySE()
+{
+    Float_t cent = ev->GetCentrality();
+    Float_t meany = 0;
+    Int_t bin = (cent/5)+1;
+    Float_t* Qy = new Float_t[2];
+    meany = MeanQy->GetBinContent(bin);
+    Qy[0]=0; Qy[1]=0;
+    Int_t n_psd_modules = ev->GetNPSDModules();
+    DataTreePSDModule* psd_module;
+    vector<DataTreePSDModule*> psd_v;
+    Float_t phi=0,q=0;
+    Float_t EofAll = ev->GetPSDEnergy();
+    for(int i=0;i<n_psd_modules;i++)
+    {
+        psd_module = ev->GetPSDModule(i);
+        if(psd_module->GetId() < 0)
+            continue;
+        psd_v.push_back(psd_module);
+    }
+    n_psd_modules = psd_v.size();
+    Float_t charge[2];
+    charge[0] = 0; charge[1] = 0;
+    while ( charge[0] == 0 || charge[1] == 0 )
+    {
+        random_shuffle(psd_v.begin(),psd_v.end());
+        for(int i=0;i<n_psd_modules;i++)
+        {
+            phi =        psd_v[i]->GetPhi();
+            q   =        abs( psd_v[i]->GetEnergy() );
+            Int_t p =i%2;
+            Qy[p] += q*sin(phi);
+            charge[p]+=q;
+        }
+    }
+    for(int i=0;i<2;i++)
+    {
+        if ( charge[i] != 0 )
+        Qy[i]/=charge[i];
+        Qy[i]-= meany; 
+    }
+    return Qy;
+}
+
+void reader::ScalarProductResolution()
+{
+    cout << "Subevent resolution as a function of centrality is building" << endl;
+    Int_t n_ev = fChain->GetEntries();
+    Float_t* Qx = new Float_t[2];
+    Float_t* Qy = new Float_t[2];
+    Float_t  cent;
+    for(int i=0; i<n_ev; i++)
+    {
+        fChain->GetEntry(i);
+        if ( !this->evSelector() )
+            continue;
+        cent = ev->GetCentrality();
+        Qx = this->GetQxSE();
+        Qy = this->GetQySE();
+        Float_t res = 4*(Qx[0]*Qx[1]+Qy[0]*Qy[1]);
+        ResPsi->Fill(cent,res);
+        this->ShowProgress(i,n_ev);
+    }
+}
+
 void reader::v_histos()
 {
     auto ResSubEv_nr = new TProfile("Res of SE, nr","Resolution of Subevent, not recentred",10,0,50);
@@ -114,7 +224,7 @@ Float_t reader::Get_v( Float_t PsiEP, Float_t phi, Int_t n=1  )
     //cout << bin << endl;
     Float_t res = ResPsi->GetBinContent(bin);
     Float_t v_n=0;
-    v_n = cos( n*(phi-PsiEP) ) / sqrt(res);
+    v_n = cos(n*(phi-PsiEP))/sqrt(res);
     if(v_n != v_n)
         cout << "PsiEP=" << PsiEP << " phi=" << phi << " res=" << res << " v1=" << v_n << "centrality =" << cent <<endl;
     return v_n;
@@ -124,14 +234,14 @@ void reader::GetFlows()
 {
     cout <<"Directed flow as function of rapidity and transverse momentum is building"<< endl;
 
-    auto y_vs_v1_cent = new TProfile("y vs v1, 0-20","rapidity vs directed flow, centrality 0-20\%, protons",10,-1,1);
-    auto pt_vs_v1_cent = new TProfile("pt vs v1, 0-20","transverse momentum vs directed flow, centrality 0-20\%, protons",10,0.,2.0);
+    auto y_vs_v1_cent = new TProfile("y vs v1, 0-20","rapidity vs directed flow, centrality 0-20\%, protons",16,-0.8,0.8);
+    auto pt_vs_v1_cent = new TProfile("pt vs v1, 0-20","transverse momentum vs directed flow, centrality 0-20\%, protons",20,0.,2.0);
     
-    auto y_vs_v1_mid = new TProfile("y vs v1, 20-30","rapidity vs directed flow, centrality 20-30\%, protons",10,-1,1);
-    auto pt_vs_v1_mid = new TProfile("pt vs v1, 20-30","transverse momentum vs directed flow, centrality 20-30\%, protons",10,0.,2.0);
+    auto y_vs_v1_mid = new TProfile("y vs v1, 20-30","rapidity vs directed flow, centrality 20-30\%, protons",16,-0.8,0.8);
+    auto pt_vs_v1_mid = new TProfile("pt vs v1, 20-30","transverse momentum vs directed flow, centrality 20-30\%, protons",20,0.,2.0);
 
-    auto y_vs_v1_per = new TProfile("y vs v1, 30-50","rapidity vs directed flow, centrality 30-50\%, protons",10,-1,1);
-    auto pt_vs_v1_per = new TProfile("pt vs v1, 30-50","transverse momentum vs directed flow, centrality 30-50\%, protons",10,0.,2.0);
+    auto y_vs_v1_per = new TProfile("y vs v1, 30-50","rapidity vs directed flow, centrality 30-50\%, protons",16,-0.8,0.8);
+    auto pt_vs_v1_per = new TProfile("pt vs v1, 30-50","transverse momentum vs directed flow, centrality 30-50\%, protons",20,0.,2.0);
 
     Int_t n_ev = fChain->GetEntries();
     DataTreeTrack* tr;
@@ -212,8 +322,6 @@ void reader::GetQMean()
         fChain->GetEntry(i);
         if ( !this->evSelector() )
             continue;
-        if( ev->GetPSDEnergy() == 0 )
-            continue;
         cent = ev->GetCentrality();
         if( cent < 0)
             continue;
@@ -235,11 +343,9 @@ void reader::GetResPsi()
         fChain->GetEntry(i);
         if ( !this->evSelector() )
             continue;
-        if(ev->GetPSDEnergy() == 0)
-            continue;
         cent = ev->GetCentrality();
         PsiEP = this->GetPsiEP_SE();
-        Float_t res = 2*cos(PsiEP[0]-PsiEP[1]);
+        Float_t res = 2*cos( PsiEP[0] - PsiEP[1] );
         ResPsi->Fill(cent,res);
         this->ShowProgress(i,n_ev);
     }
@@ -248,11 +354,10 @@ void reader::GetResPsi()
 Float_t* reader::GetPsiEP_SE(Bool_t recentring=1) // random subevent method
 {
     Float_t cent = ev->GetCentrality();
-    Float_t meanx = 0, meany=0;
     Int_t bin = (cent/5)+1;
     Float_t Qx[2], Qy[2];
-    meanx = MeanQx->GetBinContent(bin);
-    meany = MeanQy->GetBinContent(bin);
+    Float_t meanx = MeanQx->GetBinContent(bin);
+    Float_t meany = MeanQy->GetBinContent(bin);
     for(int i=0;i<2;i++)
     {
         Qx[i]=0;
@@ -262,7 +367,6 @@ Float_t* reader::GetPsiEP_SE(Bool_t recentring=1) // random subevent method
     DataTreePSDModule* psd_module;
     vector<DataTreePSDModule*> psd_v;
     Float_t phi=0,q=0;
-    Float_t EofAll = ev->GetPSDEnergy();
     for(int i=0;i<n_psd_modules;i++)
     {
         psd_module = ev->GetPSDModule(i);
@@ -270,8 +374,10 @@ Float_t* reader::GetPsiEP_SE(Bool_t recentring=1) // random subevent method
             continue;
         psd_v.push_back(psd_module);
     }
-    random_shuffle(psd_v.begin(),psd_v.end());
     n_psd_modules = psd_v.size();
+    Float_t charge[2];
+    charge[0] = 0; charge[1] = 0;
+    random_shuffle(psd_v.begin(),psd_v.end());
     for(int i=0;i<n_psd_modules;i++)
     {
         phi =        psd_v[i]->GetPhi();
@@ -279,13 +385,13 @@ Float_t* reader::GetPsiEP_SE(Bool_t recentring=1) // random subevent method
         Int_t p =i%2;
         Qx[p] += q*cos(phi);
         Qy[p] += q*sin(phi);
+        charge[p]+=q;
     }
     Float_t* PsiEP = new Float_t[2];
-    
     for(int i=0;i<2;i++)
     {
-        Qx[i]/=0.5*EofAll;
-        Qy[i]/=0.5*EofAll;
+        Qx[i]/=charge[i];
+        Qy[i]/=charge[i];
         if(recentring)
         {
             Qx[i]-= meanx; 
@@ -310,12 +416,6 @@ Float_t reader::GetPsiEP()
 
 Bool_t  reader::evSelector()
 {
-    if (ev->GetNVertexTracks() < 5)
-        return 0;
-    if (ev->GetNTOFHits() < 5)
-        return 0;
-    if (ev->GetPSDEnergy() == 0)
-        return 0;
     if (  ev->GetVertexPositionComponent(2) > 0 || ev->GetVertexPositionComponent(2) < -60 )
         return 0;
     Float_t Rx = ev->GetVertexPositionComponent(0), Ry = ev->GetVertexPositionComponent(1);
@@ -337,6 +437,21 @@ Bool_t  reader::evSelector()
         return 0;
     if( !ev->GetTrigger(HADES_constants::kNoVETO)->GetIsFired() )
         return 0;
+    Int_t n_psd_modules = ev->GetNPSDModules();
+    DataTreePSDModule* psd_module;
+    vector<DataTreePSDModule*> psd_v;
+    for(int i=0;i<n_psd_modules;i++)
+    {
+        psd_module = ev->GetPSDModule(i);
+        if(psd_module->GetId() < 0)
+            continue;
+        psd_v.push_back(psd_module);
+    }
+    n_psd_modules = psd_v.size();
+
+    if( n_psd_modules < 2)
+        return 0;
+
     return 1;
 }
 
@@ -368,12 +483,6 @@ Float_t* reader::GetQ()
     Float_t Qx=0, Qy=0;
     Float_t EofAll=0;
     Float_t* Q = new Float_t[2];
-    EofAll = ev->GetPSDEnergy();
-    if (EofAll == 0)
-    {
-        Q[0]=1; Q[1] =1;
-        return Q;
-    }
     n_psd_modules = ev->GetNPSDModules();
     for(int j=0;j<n_psd_modules;j++)
     {
@@ -384,6 +493,7 @@ Float_t* reader::GetQ()
         q   =        psd_module->GetEnergy();
         Qx+= q*cos(phi); 
         Qy+= q*sin(phi);
+        EofAll+=q;
     }
     Qx/=EofAll; Qy/=EofAll;
     Q[0]=Qx; Q[1]=Qy;

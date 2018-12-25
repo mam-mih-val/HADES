@@ -17,6 +17,9 @@ class reader
     Float_t* GetPsiEP_SE(Bool_t recentring=1);
     Float_t GetPsiEP();
     Float_t* GetQ();
+    Float_t* GetQxSE();
+    Float_t* GetQySE();
+    void    ScalarProductResolution();
     void    MassQA();
     void    GetResPsi();
     void    Q_histos();
